@@ -161,15 +161,18 @@ def create_tone(
             )
 
             # Small harmonic
-            harmonic = 0.25 * math.sin(
-                2
-                * math.pi
-                * frequency
-                * 2
-                * time
+            harmonic = (
+                0.25
+                * math.sin(
+                    2
+                    * math.pi
+                    * frequency
+                    * 2
+                    * time
+                )
             )
 
-            # Short fade
+            # Fade out
             envelope = (
                 1 - progress
             )
@@ -197,7 +200,178 @@ def create_tone(
 
 
 # ============================================================
-# CREATE SOUNDS
+# CINEMATIC SCI-FI MUSIC GENERATOR
+# ============================================================
+
+def create_ambient_music(filename):
+
+    duration = 24.0
+
+    total_samples = int(
+        SAMPLE_RATE * duration
+    )
+
+    audio_data = bytearray()
+
+    # Original dark sci-fi chord progression
+    chords = [
+        [55.0, 82.41, 110.0],
+        [49.0, 73.42, 98.0],
+        [58.27, 87.31, 116.54],
+        [43.65, 65.41, 87.31],
+    ]
+
+    for i in range(total_samples):
+
+        time = i / SAMPLE_RATE
+
+        # ----------------------------------------------------
+        # CHORD
+        # ----------------------------------------------------
+
+        chord_index = int(
+            time / 6
+        ) % len(chords)
+
+        chord = chords[
+            chord_index
+        ]
+
+        drone = 0.0
+
+        for frequency in chord:
+
+            drone += math.sin(
+                2
+                * math.pi
+                * frequency
+                * time
+            )
+
+        drone /= len(chord)
+
+
+        # ----------------------------------------------------
+        # SLOW SUB-BASS PULSE
+        # ----------------------------------------------------
+
+        pulse_frequency = 1.2
+
+        pulse = (
+            math.sin(
+                2
+                * math.pi
+                * pulse_frequency
+                * time
+            )
+            + 1
+        ) / 2
+
+        pulse *= 0.5
+
+
+        # ----------------------------------------------------
+        # ATMOSPHERIC HIGH TONES
+        # ----------------------------------------------------
+
+        atmosphere = (
+            math.sin(
+                2
+                * math.pi
+                * 220
+                * time
+            )
+            * 0.025
+        )
+
+        atmosphere += (
+            math.sin(
+                2
+                * math.pi
+                * 277.18
+                * time
+            )
+            * 0.018
+        )
+
+
+        # ----------------------------------------------------
+        # SLOW ATMOSPHERIC MOVEMENT
+        # ----------------------------------------------------
+
+        movement = (
+            math.sin(
+                2
+                * math.pi
+                * 0.07
+                * time
+            )
+            * 0.5
+            + 0.5
+        )
+
+
+        # ----------------------------------------------------
+        # MIX
+        # ----------------------------------------------------
+
+        sample = (
+            drone * 0.28
+            + drone * pulse * 0.18
+            + atmosphere * movement
+        )
+
+        # Master volume
+        sample *= 0.20
+
+
+        # ----------------------------------------------------
+        # CONVERT TO 16-BIT AUDIO
+        # ----------------------------------------------------
+
+        value = int(
+            sample * 32767
+        )
+
+        value = max(
+            -32767,
+            min(
+                32767,
+                value
+            )
+        )
+
+        audio_data += int(
+            value
+        ).to_bytes(
+            2,
+            byteorder="little",
+            signed=True
+        )
+
+
+    # --------------------------------------------------------
+    # WRITE WAV
+    # --------------------------------------------------------
+
+    with wave.open(
+        filename,
+        "w"
+    ) as sound_file:
+
+        sound_file.setnchannels(1)
+        sound_file.setsampwidth(2)
+        sound_file.setframerate(
+            SAMPLE_RATE
+        )
+
+        sound_file.writeframes(
+            audio_data
+        )
+
+
+# ============================================================
+# CREATE AUDIO
 # ============================================================
 
 create_tone(
@@ -217,14 +391,6 @@ create_tone(
 )
 
 create_tone(
-    "tick.wav",
-    180,
-    110,
-    0.055,
-    3500
-)
-
-create_tone(
     "surge.wav",
     160,
     420,
@@ -232,9 +398,13 @@ create_tone(
     4500
 )
 
+create_ambient_music(
+    "matrix_music.wav"
+)
+
 
 # ============================================================
-# LOAD SOUNDS
+# LOAD AUDIO
 # ============================================================
 
 countdown_sound = pygame.mixer.Sound(
@@ -245,19 +415,30 @@ start_sound = pygame.mixer.Sound(
     "start.wav"
 )
 
-tick_sound = pygame.mixer.Sound(
-    "tick.wav"
-)
-
 surge_sound = pygame.mixer.Sound(
     "surge.wav"
 )
 
+matrix_music = pygame.mixer.Sound(
+    "matrix_music.wav"
+)
 
-countdown_sound.set_volume(0.35)
-start_sound.set_volume(0.40)
-tick_sound.set_volume(0.08)
-surge_sound.set_volume(0.18)
+
+countdown_sound.set_volume(
+    0.35
+)
+
+start_sound.set_volume(
+    0.40
+)
+
+surge_sound.set_volume(
+    0.18
+)
+
+matrix_music.set_volume(
+    0.35
+)
 
 
 # ============================================================
@@ -320,9 +501,6 @@ class MatrixStream:
             )
         ]
 
-        # Different streams mutate
-        # at different rates.
-
         self.change_timer = 0
 
         self.change_interval = random.randint(
@@ -330,8 +508,8 @@ class MatrixStream:
             10
         )
 
-        # Some streams become temporary
-        # speed bursts.
+        # A small percentage of streams
+        # are naturally faster.
 
         self.surge = (
             random.random()
@@ -371,9 +549,6 @@ class MatrixStream:
                 )
             )
 
-            # Change multiple characters
-            # occasionally.
-
             changes = random.randint(
                 1,
                 3
@@ -392,7 +567,7 @@ class MatrixStream:
                     )
                 )
 
-        # Reset when stream leaves screen
+        # Reset when off-screen
 
         if (
             self.y
@@ -430,7 +605,6 @@ class MatrixStream:
 
                 continue
 
-            # Bright head
             if index == 0:
 
                 color = HEAD_COLOR
@@ -464,7 +638,7 @@ class MatrixStream:
 
 
 # ============================================================
-# STREAM COLLECTION
+# CREATE STREAMS
 # ============================================================
 
 streams = []
@@ -614,6 +788,11 @@ def countdown():
 
     start_sound.play()
 
+    # Start cinematic music
+    matrix_music.play(
+        loops=-1
+    )
+
     pygame.time.delay(
         400
     )
@@ -676,8 +855,6 @@ if running:
 # MAIN LOOP
 # ============================================================
 
-sound_timer = 0
-
 surge_timer = random.randint(
     300,
     600
@@ -713,20 +890,7 @@ while running:
 
 
     # --------------------------------------------------------
-    # ADDICTIVE TICK SOUND
-    # --------------------------------------------------------
-
-    sound_timer += 1
-
-    if sound_timer >= 24:
-
-        tick_sound.play()
-
-        sound_timer = 0
-
-
-    # --------------------------------------------------------
-    # RANDOM SURGE
+    # RANDOM SPEED SURGE
     # --------------------------------------------------------
 
     surge_timer -= 1
@@ -734,9 +898,6 @@ while running:
     if surge_timer <= 0:
 
         surge_sound.play()
-
-        # Temporarily accelerate
-        # several streams.
 
         selected_streams = random.sample(
             streams,
@@ -788,5 +949,7 @@ while running:
 # ============================================================
 # CLEANUP
 # ============================================================
+
+matrix_music.stop()
 
 pygame.quit()
