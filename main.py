@@ -12,15 +12,15 @@ WIDTH = 800
 HEIGHT = 800
 FPS = 60
 
-BACKGROUND = (3, 5, 4)
+BACKGROUND = (2, 4, 3)
 
-STREAM_COUNT = 42
+STREAM_COUNT = 55
 
 MIN_SPEED = 2.0
-MAX_SPEED = 6.0
+MAX_SPEED = 7.0
 
 MIN_LENGTH = 8
-MAX_LENGTH = 24
+MAX_LENGTH = 26
 
 FONT_SIZE = 22
 
@@ -31,18 +31,28 @@ SAMPLE_RATE = 44100
 # COLORS
 # ============================================================
 
-# Muted Matrix-style colors.
-# No vibrant neon colors.
-
-HEAD_COLOR = (185, 205, 185)
+HEAD_COLOR = (205, 225, 205)
 
 TRAIL_COLORS = [
-    (120, 145, 125),
-    (100, 125, 105),
-    (80, 105, 85),
-    (60, 85, 65),
-    (45, 65, 50),
+    (145, 170, 145),
+    (120, 150, 125),
+    (95, 125, 100),
+    (70, 100, 78),
+    (48, 75, 55),
+    (30, 55, 38),
 ]
+
+
+# ============================================================
+# CHARACTER SET
+# ============================================================
+
+CHARACTERS = (
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "!@#$%^&*"
+    "+-=<>/"
+)
 
 
 # ============================================================
@@ -95,29 +105,18 @@ instruction_font = pygame.font.Font(
 
 
 # ============================================================
-# CHARACTER SET
+# PROCEDURAL SOUND GENERATOR
 # ============================================================
 
-CHARACTERS = (
-    "0123456789"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "!@#$%^&*"
-    "+-=<>/"
-)
-
-
-# ============================================================
-# SOUND GENERATION
-# ============================================================
-
-def create_sound(
+def create_tone(
     filename,
-    frequency,
-    duration=0.12,
-    volume=5000
+    start_frequency,
+    end_frequency,
+    duration,
+    volume
 ):
 
-    samples = int(
+    sample_count = int(
         SAMPLE_RATE * duration
     )
 
@@ -134,24 +133,52 @@ def create_sound(
 
         audio_data = bytearray()
 
-        for i in range(samples):
+        for i in range(sample_count):
 
-            time = i / SAMPLE_RATE
+            progress = (
+                i / sample_count
+            )
 
-            wave_value = math.sin(
+            frequency = (
+                start_frequency
+                + (
+                    end_frequency
+                    - start_frequency
+                )
+                * progress
+            )
+
+            time = (
+                i / SAMPLE_RATE
+            )
+
+            # Main tone
+            sine = math.sin(
                 2
                 * math.pi
                 * frequency
                 * time
             )
 
+            # Small harmonic
+            harmonic = 0.25 * math.sin(
+                2
+                * math.pi
+                * frequency
+                * 2
+                * time
+            )
+
+            # Short fade
             envelope = (
-                1
-                - (i / samples)
+                1 - progress
             )
 
             value = int(
-                wave_value
+                (
+                    sine
+                    + harmonic
+                )
                 * envelope
                 * volume
             )
@@ -169,38 +196,68 @@ def create_sound(
         )
 
 
-# Create countdown sound
-create_sound(
+# ============================================================
+# CREATE SOUNDS
+# ============================================================
+
+create_tone(
     "countdown.wav",
-    440,
-    0.15,
+    500,
+    350,
+    0.14,
     6500
 )
 
-# Create subtle rain sound
-create_sound(
-    "rain.wav",
-    180,
-    0.08,
-    2500
+create_tone(
+    "start.wav",
+    300,
+    900,
+    0.25,
+    7000
 )
 
+create_tone(
+    "tick.wav",
+    180,
+    110,
+    0.055,
+    3500
+)
+
+create_tone(
+    "surge.wav",
+    160,
+    420,
+    0.18,
+    4500
+)
+
+
+# ============================================================
+# LOAD SOUNDS
+# ============================================================
 
 countdown_sound = pygame.mixer.Sound(
     "countdown.wav"
 )
 
-rain_sound = pygame.mixer.Sound(
-    "rain.wav"
+start_sound = pygame.mixer.Sound(
+    "start.wav"
 )
 
-countdown_sound.set_volume(
-    0.30
+tick_sound = pygame.mixer.Sound(
+    "tick.wav"
 )
 
-rain_sound.set_volume(
-    0.10
+surge_sound = pygame.mixer.Sound(
+    "surge.wav"
 )
+
+
+countdown_sound.set_volume(0.35)
+start_sound.set_volume(0.40)
+tick_sound.set_volume(0.08)
+surge_sound.set_volume(0.18)
 
 
 # ============================================================
@@ -211,41 +268,48 @@ class MatrixStream:
 
     def __init__(self):
 
-        # ----------------------------------------------------
-        # POSITION
-        # ----------------------------------------------------
+        self.reset(
+            initial=True
+        )
+
+
+    # ========================================================
+    # RESET
+    # ========================================================
+
+    def reset(
+        self,
+        initial=False
+    ):
 
         self.x = random.randint(
             0,
             WIDTH - FONT_SIZE
         )
 
-        self.y = random.uniform(
-            -HEIGHT,
-            0
-        )
+        if initial:
 
-        # ----------------------------------------------------
-        # SPEED
-        # ----------------------------------------------------
+            self.y = random.uniform(
+                -HEIGHT,
+                HEIGHT
+            )
+
+        else:
+
+            self.y = random.uniform(
+                -400,
+                -50
+            )
 
         self.speed = random.uniform(
             MIN_SPEED,
             MAX_SPEED
         )
 
-        # ----------------------------------------------------
-        # LENGTH
-        # ----------------------------------------------------
-
         self.length = random.randint(
             MIN_LENGTH,
             MAX_LENGTH
         )
-
-        # ----------------------------------------------------
-        # CHARACTERS
-        # ----------------------------------------------------
 
         self.characters = [
             random.choice(
@@ -256,16 +320,30 @@ class MatrixStream:
             )
         ]
 
-        # ----------------------------------------------------
-        # CHARACTER CHANGE TIMER
-        # ----------------------------------------------------
+        # Different streams mutate
+        # at different rates.
 
         self.change_timer = 0
 
         self.change_interval = random.randint(
-            4,
-            12
+            3,
+            10
         )
+
+        # Some streams become temporary
+        # speed bursts.
+
+        self.surge = (
+            random.random()
+            < 0.12
+        )
+
+        if self.surge:
+
+            self.speed *= random.uniform(
+                1.4,
+                2.0
+            )
 
 
     # ========================================================
@@ -274,10 +352,9 @@ class MatrixStream:
 
     def update(self):
 
-        # Move stream downward
         self.y += self.speed
 
-        # Occasionally change characters
+        # Character mutation
         self.change_timer += 1
 
         if (
@@ -287,25 +364,36 @@ class MatrixStream:
 
             self.change_timer = 0
 
-            self.change_interval = random.randint(
-                4,
-                12
-            )
-
-            # Randomly replace a character
-            index = random.randint(
-                0,
-                self.length - 1
-            )
-
-            self.characters[index] = (
-                random.choice(
-                    CHARACTERS
+            self.change_interval = (
+                random.randint(
+                    3,
+                    10
                 )
             )
 
-        # Reset when the entire stream
-        # leaves the screen
+            # Change multiple characters
+            # occasionally.
+
+            changes = random.randint(
+                1,
+                3
+            )
+
+            for _ in range(changes):
+
+                index = random.randint(
+                    0,
+                    self.length - 1
+                )
+
+                self.characters[index] = (
+                    random.choice(
+                        CHARACTERS
+                    )
+                )
+
+        # Reset when stream leaves screen
+
         if (
             self.y
             - self.length * FONT_SIZE
@@ -316,46 +404,13 @@ class MatrixStream:
 
 
     # ========================================================
-    # RESET
-    # ========================================================
-
-    def reset(self):
-
-        self.x = random.randint(
-            0,
-            WIDTH - FONT_SIZE
-        )
-
-        self.y = random.uniform(
-            -300,
-            -50
-        )
-
-        self.speed = random.uniform(
-            MIN_SPEED,
-            MAX_SPEED
-        )
-
-        self.length = random.randint(
-            MIN_LENGTH,
-            MAX_LENGTH
-        )
-
-        self.characters = [
-            random.choice(
-                CHARACTERS
-            )
-            for _ in range(
-                self.length
-            )
-        ]
-
-
-    # ========================================================
     # DRAW
     # ========================================================
 
-    def draw(self, surface):
+    def draw(
+        self,
+        surface
+    ):
 
         for index, character in enumerate(
             self.characters
@@ -366,15 +421,16 @@ class MatrixStream:
                 - index * FONT_SIZE
             )
 
-            # Don't draw characters
-            # outside the screen
             if (
-                character_y < -FONT_SIZE
-                or character_y > HEIGHT
+                character_y
+                < -FONT_SIZE
+                or character_y
+                > HEIGHT
             ):
+
                 continue
 
-            # First character is brightest
+            # Bright head
             if index == 0:
 
                 color = HEAD_COLOR
@@ -390,10 +446,12 @@ class MatrixStream:
                     color_index
                 ]
 
-            rendered_character = font.render(
-                character,
-                True,
-                color
+            rendered_character = (
+                font.render(
+                    character,
+                    True,
+                    color
+                )
             )
 
             surface.blit(
@@ -406,7 +464,7 @@ class MatrixStream:
 
 
 # ============================================================
-# CREATE STREAMS
+# STREAM COLLECTION
 # ============================================================
 
 streams = []
@@ -472,14 +530,14 @@ def draw_start_screen():
     draw_centered_text(
         "MATRIX RAIN",
         title_font,
-        (190, 205, 190),
-        HEIGHT // 2 - 50
+        (190, 215, 190),
+        HEIGHT // 2 - 55
     )
 
     draw_centered_text(
         "PRESS SPACE TO START",
         instruction_font,
-        (105, 125, 110),
+        (100, 130, 105),
         HEIGHT // 2 + 30
     )
 
@@ -526,13 +584,15 @@ def countdown():
             draw_centered_text(
                 str(number),
                 countdown_font,
-                (190, 205, 190),
+                (190, 215, 190),
                 HEIGHT // 2
             )
 
             pygame.display.flip()
 
-            clock.tick(FPS)
+            clock.tick(
+                FPS
+            )
 
 
     # --------------------------------------------------------
@@ -546,14 +606,16 @@ def countdown():
     draw_centered_text(
         "GO",
         countdown_font,
-        (190, 205, 190),
+        (205, 230, 205),
         HEIGHT // 2
     )
 
     pygame.display.flip()
 
+    start_sound.play()
+
     pygame.time.delay(
-        350
+        400
     )
 
     return True
@@ -602,7 +664,7 @@ if running:
 
 
 # ============================================================
-# START MATRIX
+# START SIMULATION
 # ============================================================
 
 if running:
@@ -615,6 +677,11 @@ if running:
 # ============================================================
 
 sound_timer = 0
+
+surge_timer = random.randint(
+    300,
+    600
+)
 
 
 while running:
@@ -637,7 +704,7 @@ while running:
 
 
     # --------------------------------------------------------
-    # UPDATE
+    # UPDATE STREAMS
     # --------------------------------------------------------
 
     for stream in streams:
@@ -646,16 +713,50 @@ while running:
 
 
     # --------------------------------------------------------
-    # SUBTLE SOUND
+    # ADDICTIVE TICK SOUND
     # --------------------------------------------------------
 
     sound_timer += 1
 
-    if sound_timer >= 45:
+    if sound_timer >= 24:
 
-        rain_sound.play()
+        tick_sound.play()
 
         sound_timer = 0
+
+
+    # --------------------------------------------------------
+    # RANDOM SURGE
+    # --------------------------------------------------------
+
+    surge_timer -= 1
+
+    if surge_timer <= 0:
+
+        surge_sound.play()
+
+        # Temporarily accelerate
+        # several streams.
+
+        selected_streams = random.sample(
+            streams,
+            min(
+                8,
+                len(streams)
+            )
+        )
+
+        for stream in selected_streams:
+
+            stream.speed *= random.uniform(
+                1.3,
+                1.8
+            )
+
+        surge_timer = random.randint(
+            360,
+            700
+        )
 
 
     # --------------------------------------------------------
@@ -679,7 +780,9 @@ while running:
 
     pygame.display.flip()
 
-    clock.tick(FPS)
+    clock.tick(
+        FPS
+    )
 
 
 # ============================================================
